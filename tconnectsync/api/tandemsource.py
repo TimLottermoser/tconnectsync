@@ -9,6 +9,12 @@ import os
 import jwt
 import pickle
 
+from typing import Any, Dict, Iterator, List, Optional
+try:
+    from typing import TypedDict
+except ImportError:  # Python 3.7
+    from typing_extensions import TypedDict
+
 from requests_oidc import make_auth_code_session
 from requests_oidc.plugins import OSCachedPlugin
 from requests_oidc.utils import ServerDetails
@@ -22,6 +28,69 @@ from ..secret import CACHE_CREDENTIALS, CACHE_CREDENTIALS_PATH
 from ..eventparser.generic import Events, decode_raw_events, EVENT_LEN
 
 logger = logging.getLogger(__name__)
+
+
+class LastUpload(TypedDict, total=False):
+    """The 'lastUpload' object within a PumpEventMetadata entry.
+
+    'settings' is the raw pump settings blob consumed by
+    tconnectsync.domain.tandemsource.pump_settings.PumpSettings.from_dict().
+    """
+    settings: dict
+
+
+class PumpEventMetadata(TypedDict):
+    """One entry returned by TandemSourceApi.pump_event_metadata().
+
+    Field names mirror the JSON returned by the
+    api/reports/reportsfacade/{pumperId}/pumpeventmetadata endpoint.
+    The *DateWithEvents fields are ISO-8601 datetime strings (parsed via
+    arrow.get()); tconnectDeviceId and serialNumber are numeric-looking
+    strings.
+    """
+    tconnectDeviceId: str
+    serialNumber: str
+    modelNumber: str
+    minDateWithEvents: str
+    maxDateWithEvents: str
+    lastUpload: LastUpload
+    patientName: str
+    patientDateOfBirth: str
+    patientCareGiver: str
+    softwareVersion: str
+    partNumber: str
+
+
+class JwtClaims(TypedDict, total=False):
+    """Decoded OIDC id_token claims stored on TandemSourceApi.jwtData.
+
+    pumperId and accountId are UUID strings (not ints); the *time/iat/exp/nbf
+    fields are unix timestamps.
+    """
+    iss: str
+    nbf: int
+    iat: int
+    exp: int
+    aud: str
+    amr: List[str]
+    at_hash: str
+    sid: str
+    sub: str
+    auth_time: int
+    idp: str
+    email: str
+    tandem_roles: List[str]
+    roles: List[str]
+    accountId: str
+    pumperId: str
+    countrySubdivision: str
+    preferredLanguage: str
+    family_name: str
+    given_name: str
+    preferred_username: str
+    name: str
+    email_verified: bool
+
 
 class TandemSourceApi:
     # Common URLs that are shared between regions
@@ -54,7 +123,7 @@ class TandemSourceApi:
         'AUTHORIZATION_ENDPOINT': 'https://tdcservices.eu.tandemdiabetes.com/accounts/api/connect/authorize'
     }
 
-    def __init__(self, email, password, region='US'):
+    def __init__(self, email: str, password: str, region: str = 'US') -> None:
         self.region = region.upper()
         if self.region not in ['US', 'EU']:
             raise ValueError(f"Invalid region '{region}'. Must be 'US' or 'EU'.")
@@ -66,30 +135,30 @@ class TandemSourceApi:
         self._password = password
 
     @property
-    def LOGIN_API_URL(self):
+    def LOGIN_API_URL(self) -> str:
         return self._region_urls['LOGIN_API_URL']
-    
+
     @property
-    def TDC_OAUTH_AUTHORIZE_URL(self):
+    def TDC_OAUTH_AUTHORIZE_URL(self) -> str:
         return self._region_urls['TDC_OAUTH_AUTHORIZE_URL']
-    
+
     @property
-    def TDC_OIDC_JWKS_URL(self):
+    def TDC_OIDC_JWKS_URL(self) -> str:
         return self._region_urls['TDC_OIDC_JWKS_URL']
-    
+
     @property
-    def TDC_OIDC_ISSUER(self):
+    def TDC_OIDC_ISSUER(self) -> str:
         return self._region_urls['TDC_OIDC_ISSUER']
-    
+
     @property
-    def TDC_OIDC_CLIENT_ID(self):
+    def TDC_OIDC_CLIENT_ID(self) -> str:
         return self._region_urls['TDC_OIDC_CLIENT_ID']
-    
+
     @property
-    def SOURCE_URL(self):
+    def SOURCE_URL(self) -> str:
         return self._region_urls['SOURCE_URL']
 
-    def login(self, email, password):
+    def login(self, email: str, password: str) -> bool:
         logger.info(f"Logging in to TandemSourceApi ({self.region} region)...")
         if self.try_load_cached_creds(email):
             logger.info("Successfully used cached credentials")
@@ -125,12 +194,12 @@ class TandemSourceApi:
 
             token_endpoint = self._region_urls['TOKEN_ENDPOINT']
 
-            def generate_code_verifier():
+            def generate_code_verifier() -> str:
                 """Generates a high-entropy code verifier."""
                 code_verifier = base64.urlsafe_b64encode(os.urandom(64)).decode('utf-8').rstrip('=')
                 return code_verifier
 
-            def generate_code_challenge(verifier):
+            def generate_code_challenge(verifier: str) -> str:
                 """Generates a code challenge from the code verifier."""
                 sha256_digest = hashlib.sha256(verifier.encode('utf-8')).digest()
                 code_challenge = base64.urlsafe_b64encode(sha256_digest).decode('utf-8').rstrip('=')
@@ -208,7 +277,7 @@ class TandemSourceApi:
 
             return True
 
-    def extract_jwt(self):
+    def extract_jwt(self) -> None:
         logger.debug("6. extracting JWT from %s" % self.idToken)
         id_token = self.idToken
 
@@ -241,11 +310,11 @@ class TandemSourceApi:
 
         logger.info("Decoded JWT: %s" % json.dumps(id_token_claims))
 
-        self.jwtData = id_token_claims
-        self.pumperId = id_token_claims['pumperId']
-        self.accountId = id_token_claims['accountId']
+        self.jwtData: JwtClaims = id_token_claims
+        self.pumperId: str = id_token_claims['pumperId']
+        self.accountId: str = id_token_claims['accountId']
 
-    def try_load_cached_creds(self, email):
+    def try_load_cached_creds(self, email: str) -> bool:
         if not CACHE_CREDENTIALS:
             return False
 
@@ -292,7 +361,7 @@ class TandemSourceApi:
         self.accessTokenExpiresAt = _saved_blob['accessTokenExpiresAt']
         self.loginSession = _saved_blob['loginSession']
 
-        def est_time(t):
+        def est_time(t: arrow.Arrow) -> str:
             now = arrow.get()
             if now < t:
                 sec = (t - now).seconds
@@ -324,7 +393,7 @@ class TandemSourceApi:
         return True
 
 
-    def cache_creds(self, email):
+    def cache_creds(self, email: str) -> None:
         if not CACHE_CREDENTIALS:
             logger.info("Credentials caching is disabled, skipping save")
             return
@@ -353,14 +422,14 @@ class TandemSourceApi:
             logger.info(f"Saved cached credentials to {CACHE_CREDENTIALS_PATH}")
 
 
-    def needs_relogin(self):
+    def needs_relogin(self) -> bool:
         if not self.accessTokenExpiresAt:
             return False
 
         diff = (arrow.get(self.accessTokenExpiresAt) - arrow.get())
         return (diff.seconds <= 5 * 60)
 
-    def api_headers(self):
+    def api_headers(self) -> Dict[str, str]:
         if not self.accessToken:
             raise Exception('No access token provided')
         return {
@@ -373,7 +442,7 @@ class TandemSourceApi:
             **base_headers()
         }
 
-    def _get(self, endpoint, query):
+    def _get(self, endpoint: str, query: dict) -> Any:
         r = base_session().get(self.SOURCE_URL + endpoint, data=query, headers=self.api_headers())
 
         if r.status_code != 200:
@@ -381,7 +450,7 @@ class TandemSourceApi:
         return r.json()
 
 
-    def get(self, endpoint, query, tries=0):
+    def get(self, endpoint: str, query: dict, tries: int = 0) -> Any:
         try:
             return self._get(endpoint, query)
         except ApiException as e:
@@ -405,7 +474,8 @@ class TandemSourceApi:
     """
     Returns information about the user and available pumps.
     """
-    def pumper_info(self):
+    # Response shape is undocumented and unused by callers, so it stays Any.
+    def pumper_info(self) -> Any:
         return self.get('api/pumpers/pumpers/%s' % (self.pumperId), {})
 
     """
@@ -414,16 +484,16 @@ class TandemSourceApi:
         {'tconnectDeviceId', 'serialNumber', 'modelNumber', 'minDateWithEvents', 'maxDateWithEvents', 'lastUpload', 'patientName', 'patientDateOfBirth', 'patientCareGiver', 'softwareVersion', 'partNumber'},
     ]
     """
-    def pump_event_metadata(self):
+    def pump_event_metadata(self) -> List[PumpEventMetadata]:
         return self.get('api/reports/reportsfacade/%s/pumpeventmetadata' % (self.pumperId), {})
 
-    DEFAULT_EVENT_IDS = [229,5,28,4,26,99,279,3,16,59,21,55,20,280,64,65,66,61,33,371,171,369,460,172,370,461,372,399,256,213,406,394,212,404,214,405,447,313,60,14,6,90,230,140,12,11,53,13,63,203,307,191]
+    DEFAULT_EVENT_IDS: List[int] = [229,5,28,4,26,99,279,3,16,59,21,55,20,280,64,65,66,61,33,371,171,369,460,172,370,461,372,399,256,213,406,394,212,404,214,405,447,313,60,14,6,90,230,140,12,11,53,13,63,203,307,191]
 
     """
     Returns raw unparsed string for pump events
     tconnect_device_id is "tconnectDeviceId" from pump_event_metadata()
     """
-    def pump_events_raw(self, tconnect_device_id, min_date=None, max_date=None, event_ids_filter=DEFAULT_EVENT_IDS):
+    def pump_events_raw(self, tconnect_device_id: str, min_date: Optional[str] = None, max_date: Optional[str] = None, event_ids_filter: Optional[List[int]] = DEFAULT_EVENT_IDS) -> str:
         minDate = parse_ymd_date(min_date)
         maxDate = parse_ymd_date(max_date)
         logger.debug(f'pump_events_raw({tconnect_device_id}, {minDate}, {maxDate})')
@@ -443,7 +513,7 @@ class TandemSourceApi:
     Default of fetch_all_events=False will filter to the same eventids used in the Tandem Source backend.
     If fetch_all_events=True, then all event types from the history log will be returned.
     """
-    def pump_events(self, tconnect_device_id, min_date=None, max_date=None, fetch_all_event_types=False):
+    def pump_events(self, tconnect_device_id: str, min_date: Optional[str] = None, max_date: Optional[str] = None, fetch_all_event_types: bool = False) -> Iterator:
         pump_events_raw = self.pump_events_raw(
             tconnect_device_id,
             min_date,

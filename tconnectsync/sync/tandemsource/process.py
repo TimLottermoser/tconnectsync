@@ -7,7 +7,7 @@ from typing import List, Optional, Tuple, TYPE_CHECKING
 if TYPE_CHECKING:
     from ...api import TConnectApi
     from ...nightscout import NightscoutApi
-    from ...api.tandemsource import PumpEventMetadata
+    from ...api.tandemsource import PumpMetadata
 
 from ...features import DEVICE_STATUS, DEFAULT_FEATURES
 from ...eventparser import events as eventtypes
@@ -28,10 +28,10 @@ from .update_profiles import UpdateProfiles
 logger = logging.getLogger(__name__)
 
 class ProcessTimeRange:
-    def __init__(self, tconnect: "TConnectApi", nightscout: "NightscoutApi", tconnectDevice: "PumpEventMetadata", pretend: bool, secret: ModuleType, features: List[str] = DEFAULT_FEATURES) -> None:
+    def __init__(self, tconnect: "TConnectApi", nightscout: "NightscoutApi", tconnectDevice: "PumpMetadata", pretend: bool, secret: ModuleType, features: List[str] = DEFAULT_FEATURES) -> None:
         self.tconnect = tconnect
         self.nightscout = nightscout
-        self.tconnect_device_id = tconnectDevice['tconnectDeviceId']
+        self.tconnect_device_id = tconnectDevice['deviceId']
         self.max_date_with_events = tconnectDevice['maxDateWithEvents']
         self.pretend = pretend
         self.secret = secret

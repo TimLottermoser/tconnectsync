@@ -90,7 +90,7 @@ def check_login(tconnect, time_start, time_end, verbose=False, sanitize=True):
     serialNumberToPump = None
     try:
         log("Fetching pump metadata...")
-        pumpEventMetadata = tconnect.tandemsource.pump_event_metadata()
+        pumpEventMetadata = tconnect.tandemsource.pump_metadata()
 
         serialNumberToPump = {p['serialNumber']: p for p in pumpEventMetadata}
         log(f'Found {len(serialNumberToPump)} pumps: {serialNumberToPump.keys()}')
@@ -102,7 +102,7 @@ def check_login(tconnect, time_start, time_end, verbose=False, sanitize=True):
 
         log(f'ChooseDevice selected: {tconnectDevice}')
 
-        tconnectDeviceId = tconnectDevice['tconnectDeviceId']
+        tconnectDeviceId = tconnectDevice['deviceId']
 
         log(f'Fetching pump events for {tconnectDeviceId=} {time_start=} {time_end=} fetch_all_event_types=False')
 
@@ -187,7 +187,7 @@ def check_login(tconnect, time_start, time_end, verbose=False, sanitize=True):
             if serialNumberToPump:
                 for i, (pumpSerial, pumpDetails) in enumerate(serialNumberToPump.items()):
                     sanitizedData[f'PUMP_SERIAL_{i}'] = pumpSerial
-                    sanitizedData[f'TCONNECT_DEVICE_ID_{i}'] = pumpDetails['tconnectDeviceId']
+                    sanitizedData[f'TCONNECT_DEVICE_ID_{i}'] = pumpDetails['deviceId']
             loglines = [run_sanitize(i, sanitizedData) for i in loglines]
 
         f.writelines(loglines)

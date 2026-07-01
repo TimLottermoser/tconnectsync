@@ -618,15 +618,14 @@ class TandemSourceApi:
     DEFAULT_EVENT_IDS: List[int] = [229,5,28,4,26,99,279,3,16,59,21,55,20,280,64,65,66,61,33,371,171,369,460,172,370,461,372,480,399,256,213,406,477,394,212,404,214,405,486,447,313,60,14,6,90,230,140,12,11,53,13,63,203,307,191]
 
     """
-    Returns raw unparsed string for pump events
-    tconnect_device_id is "tconnectDeviceId" from pump_event_metadata()
+    Returns raw unparsed string for pump events.
+    tconnect_device_id is the device id from pump_metadata() (deviceId).
     """
     def pump_events_raw(self, tconnect_device_id: str, min_date: Optional[str] = None, max_date: Optional[str] = None, event_ids_filter: Optional[List[int]] = DEFAULT_EVENT_IDS) -> str:
         minDate = parse_ymd_date(min_date)
         maxDate = parse_ymd_date(max_date)
         logger.debug(f'pump_events_raw({tconnect_device_id}, {minDate}, {maxDate})')
 
-        # default: 229,5,28,4,26,99,279,3,16,59,21,55,20,280,64,65,66,61,33,371,171,369,460,172,370,461,372,399,256,213,406,394,212,404,214,405,447,313,60,14,6,90,230,140,12,11,53,13,63,203,307,191
         eventIdsFilter = '%2C'.join(map(str, event_ids_filter)) if event_ids_filter else None
         return self.get('api/reports/reportsfacade/pumpevents/%s/%s?minDate=%s&maxDate=%s%s' % (
             self.pumperId,

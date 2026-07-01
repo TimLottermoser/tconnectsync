@@ -6,7 +6,8 @@ import struct
 from tconnectsync.sync.tandemsource.process_device_status import ProcessDeviceStatus
 from tconnectsync.eventparser import events as eventtypes
 from tconnectsync.eventparser.events import UINT16
-from tconnectsync.eventparser.generic import Event
+from tconnectsync.eventparser.generic import Event, Event_from_json
+from tconnectsync.eventparser.raw_event import RawEvent
 
 from ...api.fake import TConnectApi
 from ...nightscout_fake import NightscoutApi
@@ -146,6 +147,47 @@ class TestProcessDeviceStatus(unittest.TestCase):
             },
             'pump_event_id': '1047614'
         })
+
+    def test_no_daily_basal_event_degrades_gracefully(self):
+        # DEVICE_STATUS relies on event 81 (LidDailyBasal), which is not in
+        # Tandem's default id list and may not be returned by the pump-logs
+        # endpoint. When it is absent the processor must return nothing rather
+        # than raise. Feed a real non-daily-basal event (eventCode 16).
+        self.nightscout.last_uploaded_devicestatus = lambda *args, **kwargs: None
+
+        events = [Event_from_json({
+            "eventCode": 16,
+            "sequenceGroup": 0,
+            "sequenceNumber": 100,
+            "pumpDateTime": "2024-12-03T23:40:23",
+            "eventProperties": {"iob": 1.25, "bg": 112},
+        })]
+
+        p = self.process.process(events, time_start=None, time_end=None)
+        self.assertEqual(p, [])
+
+    def test_daily_basal_missing_battery_is_skipped(self):
+        # If an event 81 is returned without parseable battery fields, skip it
+        # instead of raising on the battery-percent arithmetic.
+        self.nightscout.last_uploaded_devicestatus = lambda *args, **kwargs: None
+
+        raw = RawEvent.build_from_json({
+            "eventCode": 81,
+            "sequenceNumber": 200,
+            "pumpDateTime": "2024-12-03T23:40:23",
+        })
+        event = eventtypes.LidDailyBasal(
+            raw=raw,
+            dailytotalbasal=None,
+            lastbasalrate=None,
+            iob=None,
+            batterychargepercentmsbRaw=None,
+            batterychargepercentlsbRaw=None,
+            batterylipomillivolts=None,
+        )
+
+        p = self.process.process([event], time_start=None, time_end=None)
+        self.assertEqual(p, [])
 
     @unittest.skip
     def test_device_status_battery_calculation(self):

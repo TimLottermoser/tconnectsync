@@ -58,11 +58,19 @@ class ProcessDeviceStatus:
 
         logger.info("ProcessDeviceStatus: last_daily_basal_event=%s" % (last_daily_basal_event))
 
-        ns_entries = []
-        ns_entries.append(self.daily_basal_to_nsentry(last_daily_basal_event))
-        return ns_entries
+        entry = self.daily_basal_to_nsentry(last_daily_basal_event)
+        if entry is None:
+            return []
+        return [entry]
 
     def daily_basal_to_nsentry(self, event: "BaseEvent") -> Optional[dict]:
+        # The battery percent is derived from the msb/lsb raw fields; if the
+        # event arrived without them (an event shape we can't yet parse), skip
+        # it rather than raise on the arithmetic below.
+        if event.batterychargepercentmsbRaw is None or event.batterychargepercentlsbRaw is None:
+            logger.warning("ProcessDeviceStatus: skipping daily basal event missing battery data: %s" % event)
+            return None
+
         return NightscoutEntry.devicestatus(
             created_at=event.eventTimestamp.format(),
             batteryVoltage=(float(event.batterylipomillivolts or 0)/1000),

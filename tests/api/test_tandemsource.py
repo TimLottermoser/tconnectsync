@@ -106,6 +106,52 @@ class TestPumpMetadataAdapter(unittest.TestCase):
         with patch.object(TandemSourceApi, "get_pumper", return_value={}):
             self.assertEqual(api.pump_metadata(), [])
 
+    def test_available_data_range_key_absent(self):
+        pump = dict(BFF_PUMPER["pumps"][0])
+        del pump["availableDataRange"]
+        meta = TandemSourceApi._bff_pump_to_metadata(pump)
+        self.assertIsNone(meta["minDateWithEvents"])
+
+    def test_settings_key_absent(self):
+        pump = dict(BFF_PUMPER["pumps"][0])
+        del pump["settings"]
+        meta = TandemSourceApi._bff_pump_to_metadata(pump)
+        self.assertIsNone(meta["settings"])
+
+    def test_missing_required_key_raises(self):
+        pump = dict(BFF_PUMPER["pumps"][0])
+        del pump["serialNumber"]
+        with self.assertRaises(KeyError):
+            TandemSourceApi._bff_pump_to_metadata(pump)
+
+    def test_mobi_controliq_plus_passthrough(self):
+        pump = {
+            "algorithm": "Control-IQ+",
+            "availableDataRange": {"start": "2024-01-01T00:00:00", "end": "2026-05-27T23:03:06"},
+            "assignmentId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "maxDateOfEvents": "2026-05-27T23:03:06",
+            "modelNumber": "1004000",
+            "modelName": "Tandem Mobi™ System",
+            "partNumber": "1005000",
+            "serialNumber": "1518994",
+            "softwareVersion": "1.0.0.0",
+            "lastUploadClientType": "mobile_mobi",
+            "settings": None,
+        }
+        meta = TandemSourceApi._bff_pump_to_metadata(pump)
+        self.assertEqual(meta["algorithm"], "Control-IQ+")
+        self.assertEqual(meta["modelName"], "Tandem Mobi™ System")
+        self.assertEqual(meta["deviceId"], "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+
+
+class TestDefaultEventIds(unittest.TestCase):
+    def test_default_event_ids(self):
+        ids = TandemSourceApi.DEFAULT_EVENT_IDS
+        self.assertEqual(len(ids), 55)
+        self.assertEqual(len(set(ids)), 55, "DEFAULT_EVENT_IDS contains duplicates")
+        # FSL3 ids added for the BFF pump-logs endpoint
+        self.assertTrue({477, 480, 486}.issubset(set(ids)))
+
 
 if __name__ == "__main__":
     unittest.main()

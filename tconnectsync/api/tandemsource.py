@@ -92,6 +92,61 @@ class JwtClaims(TypedDict, total=False):
     email_verified: bool
 
 
+class AvailableDataRange(TypedDict):
+    """`availableDataRange` on a BffPump. start/end are ISO-8601 datetime
+    strings, or null for a pump that has never uploaded."""
+    start: Optional[str]
+    end: Optional[str]
+
+
+class PumpSettingsEnvelope(TypedDict):
+    """`settings` on a BffPump. `details` is the full pump settings blob,
+    parsed by tconnectsync.domain.tandemsource.pump_settings.PumpSettings."""
+    id: str
+    deviceAssignmentId: str
+    uploadedTimeStamp: str
+    settingsHash: str
+    uploadId: str
+    details: dict
+
+
+class BffPump(TypedDict, total=False):
+    """One element of BffPumper.pumps, from GET api/reports/bff/pumper/{pumperId}.
+
+    `assignmentId` is the pump's UUID device id used as the path segment for
+    the pump-logs endpoint (replaces the old numeric tconnectDeviceId).
+    Several fields (settings, *Date*, lastUploadClientType, glucoseUnit,
+    availableDataRange.start/end) are null or absent for never-uploaded or
+    retired pumps, hence total=False.
+    """
+    algorithm: str
+    availableDataRange: AvailableDataRange
+    assignmentId: str
+    glucoseUnit: Optional[str]
+    lastUploadDate: Optional[str]
+    maxDateOfEvents: Optional[str]
+    modelNumber: str
+    modelName: str
+    partNumber: str
+    serialNumber: str
+    softwareVersion: str
+    lastUploadClientType: Optional[str]
+    settings: Optional[PumpSettingsEnvelope]
+
+
+class BffPumper(TypedDict, total=False):
+    """Response of GET api/reports/bff/pumper/{pumperId} (the BFF device list
+    that replaces pumpeventmetadata)."""
+    firstName: str
+    lastName: str
+    name: str
+    dateOfBirth: str
+    lowGlucoseThreshold: int
+    highGlucoseThreshold: int
+    country: str
+    pumps: List[BffPump]
+
+
 class TandemSourceApi:
     # Common URLs that are shared between regions
     LOGIN_PAGE_URL = 'https://sso.tandemdiabetes.com/'
@@ -504,6 +559,14 @@ class TandemSourceApi:
     """
     def pump_event_metadata(self) -> List[PumpEventMetadata]:
         return self.get('api/reports/reportsfacade/%s/pumpeventmetadata' % (self.pumperId), {})
+
+    def get_pumper(self) -> BffPumper:
+        """Returns the pumper's profile plus the list of pumps on the account
+        (BffPumper.pumps) from the new BFF endpoint. Replaces
+        pump_event_metadata(): pumps[].assignmentId is the UUID device id used
+        by the pump-logs endpoint, and pumps[].settings.details carries the
+        pump settings blob."""
+        return self.get('api/reports/bff/pumper/%s' % (self.pumperId), {})
 
     # Matches the Tandem Source web app's getLogIDList() (55 IDs) as observed in
     # the live GET api/reports/bff/pump-logs request. Includes FSL3 ids 477/480/486.

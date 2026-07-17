@@ -217,7 +217,7 @@ class TandemSourceApi:
     def __init__(self, email: str, password: str, region: str = 'US') -> None:
         import os
          # Ignoriere, was übergeben wurde, und nimm die Heroku-Variable (Fallback auf 'EU' statt 'US')
-         self.region = os.environ.get('TCONNECT_REGION', 'EU').upper()
+        self.region = os.environ.get('TCONNECT_REGION', 'EU').upper()
         if self.region not in ['US', 'EU']:
             raise ValueError(f"Invalid region '{region}'. Must be 'US' or 'EU'.")
         

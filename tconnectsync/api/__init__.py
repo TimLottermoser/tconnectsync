@@ -14,6 +14,8 @@ class TConnectApi:
         self.password = password
         self.region = region
         self._tandemsource = None
+        # --- KLARTEXT DEBUG IN __INIT__ ---
+        logger.warning(f"DEBUG [__init__] EMAIL: '{email}' | PASSWORD: '{password}' | REGION: '{region}'")
 
     @property
     def tandemsource(self):
@@ -21,6 +23,9 @@ class TConnectApi:
             return self._tandemsource
 
         logger.debug(f"Instantiating new TandemSourceApi for region {self.region}")
-
+        
+        # --- KLARTEXT DEBUG VOR DEM LOGIN-VERSUCH ---
+        logger.warning(f"DEBUG [tandemsource] LOGIN-START -> EMAIL: '{self.email}' | PASSWORD: '{self.password}' | REGION: '{self.region}'")
+        
         self._tandemsource = TandemSourceApi(self.email, self.password, self.region)
         return self._tandemsource

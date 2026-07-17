@@ -215,18 +215,15 @@ class TandemSourceApi:
     }
 
     def __init__(self, email: str, password: str, region: str = 'US') -> None:
-        import os
-        # Ignoriere, was übergeben wurde, und nimm die Heroku-Variable (Fallback auf 'EU' statt 'US')
-        self.region = os.environ.get('TCONNECT_REGION', 'EU').upper()
+        self.region = region.upper()
         if self.region not in ['US', 'EU']:
             raise ValueError(f"Invalid region '{region}'. Must be 'US' or 'EU'.")
         
         self._region_urls = self._US_URLS if self.region == 'US' else self._EU_URLS
+        
         self.login(email, password)
         self._email = email
         self._password = password
-
-        logger.warning(f"DEBUG [tandemsource] LOGIN-START in Tandemsource.py -> EMAIL: '{self.email}' | PASSWORD: '{self.password}' | REGION: '{self.region}'")
 
     @property
     def LOGIN_API_URL(self) -> str:

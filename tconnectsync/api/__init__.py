@@ -9,7 +9,7 @@ class TConnectApi:
     email = None
     password = None
 
-    def __init__(self, email, password, region='US'):
+    def __init__(self, email, password, region='EU'):
         self.email = email
         self.password = password
         self.region = region
